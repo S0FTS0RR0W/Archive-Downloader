@@ -27,3 +27,29 @@ python Downloader.py https://archive.org/details/your-archive-item
 ```
 
 The script will create a directory named after the archive item's identifier and download all files into it.
+
+## Running with Docker
+
+You can also run this application using Docker.
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/get-started) installed on your system.
+
+### Building the Image
+
+First, build the Docker image:
+
+```bash
+docker build -t archive-downloader .
+```
+
+### Running the Container
+
+Then, run the container:
+
+```bash
+docker run -p 5000:5000 archive-downloader
+```
+
+The application will be available at [http://localhost:5000](http://localhost:5000).
