@@ -53,3 +53,21 @@ docker run -p 5000:5000 archive-downloader
 ```
 
 The application will be available at [http://localhost:5000](http://localhost:5000).
+
+## Running with Docker Compose
+
+You can also use Docker Compose to run the application.
+
+### Prerequisites
+
+- [Docker](https://www.docker.com/get-started) and [Docker Compose](https://docs.docker.com/compose/install/) installed on your system.
+
+### Usage
+
+From the root of the project directory, run:
+
+```bash
+docker-compose up
+```
+
+The application will be available at [http://localhost:5000](http://localhost:5000).
