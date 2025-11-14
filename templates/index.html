@@ -4,17 +4,101 @@
   <meta charset="UTF-8">
   <title>Archive Shrine Downloader</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+    .fade-in {
+      animation: fadeIn 0.5s ease-out forwards;
+    }
+    .fade-out {
+      animation: fadeOut 0.5s ease-in forwards;
+    }
+    .spinner {
+      border-top-color: #3498db;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
-<body class="bg-gray-100 text-gray-900">
-  <div class="max-w-xl mx-auto mt-10 p-6 bg-white rounded shadow">
-    <h1 class="text-2xl font-bold mb-4">📦 Archive Shrine Downloader</h1>
-    <form method="post">
-      <input name="url" type="text" placeholder="Paste Archive.org URL" class="w-full p-2 border rounded mb-4">
-      <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Download</button>
+<body class="bg-gray-900 text-gray-100 flex items-center justify-center h-screen">
+  <div class="max-w-xl w-full mx-auto p-8 bg-gray-800 rounded-lg shadow-lg">
+    <h1 class="text-3xl font-bold mb-6 text-center">📦 Archive Shrine Downloader</h1>
+    <form id="download-form">
+      <input name="url" type="text" placeholder="Paste Archive.org URL" class="w-full p-3 bg-gray-700 border border-gray-600 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button type="submit" class="w-full bg-blue-600 text-white px-4 py-3 rounded hover:bg-blue-700 transition-colors duration-300 font-semibold">Download</button>
     </form>
-    {% if message %}
-      <div class="mt-4 text-green-600">{{ message }}</div>
-    {% endif %}
+    <div id="spinner" class="hidden spinner ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mt-6"></div>
+    <div id="message-container" class="mt-6"></div>
   </div>
+
+  <script>
+    const form = document.getElementById('download-form');
+    const spinner = document.getElementById('spinner');
+    const messageContainer = document.getElementById('message-container');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const url = formData.get('url');
+
+      if (!url) {
+        displayMessage('Please enter a URL.', 'error');
+        return;
+      }
+
+      spinner.classList.remove('hidden');
+      messageContainer.innerHTML = '';
+
+      try {
+        const response = await fetch('/download', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+        displayMessage(result.message, result.status);
+
+      } catch (error) {
+        displayMessage('An unexpected error occurred.', 'error');
+      } finally {
+        spinner.classList.add('hidden');
+      }
+    });
+
+    function displayMessage(message, status) {
+      messageContainer.innerHTML = '';
+      const messageElement = document.createElement('div');
+      let bgColor = 'bg-gray-700';
+      if (status === 'success') {
+        bgColor = 'bg-green-500';
+      } else if (status === 'error') {
+        bgColor = 'bg-red-500';
+      } else if (status === 'info') {
+        bgColor = 'bg-blue-500';
+      }
+      
+      messageElement.className = `p-4 rounded text-white text-center ${bgColor} fade-in`;
+      messageElement.textContent = message;
+      messageContainer.appendChild(messageElement);
+
+      setTimeout(() => {
+        messageElement.classList.remove('fade-in');
+        messageElement.classList.add('fade-out');
+        setTimeout(() => {
+            if(messageContainer.contains(messageElement)) {
+                messageContainer.removeChild(messageElement);
+            }
+        }, 500);
+      }, 5000);
+    }
+  </script>
 </body>
 </html>
