@@ -1,7 +1,13 @@
 from flask import Flask, request, render_template, jsonify
-import subprocess
+from multiprocessing import Manager, Process
+import Downloader
 
 app = Flask(__name__)
+
+# Use a manager for shared state
+manager = Manager()
+download_status = manager.dict()
+download_history = manager.list()
 
 @app.route('/')
 def home():
@@ -13,20 +19,24 @@ def download():
     if not url:
         return jsonify({'status': 'error', 'message': 'URL is required.'}), 400
 
-    process = subprocess.Popen(['python', 'Downloader.py', url],
-                               stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT,
-                               text=True)
-    output, _ = process.communicate()
+    # Reset status and history for a new download
+    download_status.clear()
+    # Clear the list by replacing its content
+    download_history[:] = []
+    
+    # Start the download in a separate process
+    p = Process(target=Downloader.download_all_files, args=(url, download_status, download_history))
+    p.start()
 
-    if "No files found" in output:
-        message = "No files found for the given URL."
-        status = "info"
-    elif "Error" in output:
-        message = "An error occurred while processing the URL."
-        status = "error"
-    else:
-        message = f"Download started for: {url}"
-        status = "success"
-        
-    return jsonify({'status': status, 'message': message})
+    return jsonify({'status': 'success', 'message': f'Download initiated for: {url}'})
+
+@app.route('/status')
+def status():
+    return jsonify(dict(download_status))
+
+@app.route('/history')
+def history():
+    return jsonify(list(download_history))
+
+if __name__ == '__main__':
+    app.run(debug=True, use_reloader=False)

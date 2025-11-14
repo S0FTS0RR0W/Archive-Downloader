@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,21 +29,41 @@
     }
   </style>
 </head>
-<body class="bg-gray-900 text-gray-100 flex items-center justify-center h-screen">
-  <div class="max-w-xl w-full mx-auto p-8 bg-gray-800 rounded-lg shadow-lg">
-    <h1 class="text-3xl font-bold mb-6 text-center">Archive Shrine Downloader</h1>
-    <form id="download-form">
-      <input name="url" type="text" placeholder="Paste Archive.org URL" class="w-full p-3 bg-gray-700 border border-gray-600 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
-      <button type="submit" class="w-full bg-blue-600 text-white px-4 py-3 rounded hover:bg-blue-700 transition-colors duration-300 font-semibold">Download</button>
-    </form>
-    <div id="spinner" class="hidden spinner ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mt-6"></div>
-    <div id="message-container" class="mt-6"></div>
+<body class="bg-gray-900 text-gray-100">
+  <div class="max-w-4xl w-full mx-auto p-8">
+    <div class="bg-gray-800 rounded-lg shadow-lg p-8 mb-8">
+      <h1 class="text-3xl font-bold mb-6 text-center">Archive Shrine Downloader</h1>
+      <form id="download-form">
+        <input name="url" type="text" placeholder="Paste Archive.org URL" class="w-full p-3 bg-gray-700 border border-gray-600 rounded mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button type="submit" class="w-full bg-blue-600 text-white px-4 py-3 rounded hover:bg-blue-700 transition-colors duration-300 font-semibold">Download</button>
+      </form>
+      <div id="spinner" class="hidden spinner ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mt-6"></div>
+      <div id="message-container" class="mt-6"></div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div class="bg-gray-800 rounded-lg shadow-lg p-8">
+        <h2 class="text-2xl font-bold mb-4">Currently Downloading</h2>
+        <div id="current-status">
+          <p class="text-gray-400">No active downloads.</p>
+        </div>
+      </div>
+      <div class="bg-gray-800 rounded-lg shadow-lg p-8">
+        <h2 class="text-2xl font-bold mb-4">Download History</h2>
+        <div id="history-container" class="space-y-2">
+          <p class="text-gray-400">No download history yet.</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script>
     const form = document.getElementById('download-form');
     const spinner = document.getElementById('spinner');
     const messageContainer = document.getElementById('message-container');
+    const currentStatusContainer = document.getElementById('current-status');
+    const historyContainer = document.getElementById('history-container');
+    let pollingInterval;
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -56,6 +77,8 @@
 
       spinner.classList.remove('hidden');
       messageContainer.innerHTML = '';
+      currentStatusContainer.innerHTML = '<p class="text-gray-400">Starting...</p>';
+      historyContainer.innerHTML = '<p class="text-gray-400">...</p>';
 
       try {
         const response = await fetch('/download', {
@@ -66,12 +89,60 @@
         const result = await response.json();
         displayMessage(result.message, result.status);
 
+        if (result.status === 'success') {
+          if (pollingInterval) clearInterval(pollingInterval);
+          pollingInterval = setInterval(updateStatusAndHistory, 2000);
+        }
+
       } catch (error) {
         displayMessage('An unexpected error occurred.', 'error');
       } finally {
         spinner.classList.add('hidden');
       }
     });
+
+    async function updateStatusAndHistory() {
+      try {
+        const [statusRes, historyRes] = await Promise.all([
+          fetch('/status'),
+          fetch('/history')
+        ]);
+
+        const status = await statusRes.json();
+        const history = await historyRes.json();
+
+        // Update current status
+        if (status.current_file) {
+          currentStatusContainer.innerHTML = `<p class="font-mono">${status.current_file}</p>`;
+        } else {
+          currentStatusContainer.innerHTML = `<p class="text-gray-400">No active downloads.</p>`;
+          // If there's no current file and there's history, the download is likely complete.
+          if (history.length > 0) {
+            clearInterval(pollingInterval);
+          }
+        }
+
+        // Update history
+        if (history.length > 0) {
+          historyContainer.innerHTML = '';
+          history.forEach(item => {
+            const p = document.createElement('p');
+            p.className = 'font-mono text-sm';
+            const statusColor = item.status === 'Completed' ? 'text-green-400' : 'text-red-400';
+            p.innerHTML = `${item.file} - <span class="${statusColor}">${item.status}</span>`;
+            historyContainer.appendChild(p);
+          });
+        } else {
+          historyContainer.innerHTML = '<p class="text-gray-400">No download history yet.</p>';
+        }
+
+      } catch (error)
+      {
+        console.error("Error updating status:", error);
+        // Stop polling on error to prevent spamming the console
+        if (pollingInterval) clearInterval(pollingInterval);
+      }
+    }
 
     function displayMessage(message, status) {
       messageContainer.innerHTML = '';
