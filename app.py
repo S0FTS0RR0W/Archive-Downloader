@@ -6,7 +6,6 @@ app = Flask(__name__)
 
 # Use a manager for shared state
 manager = Manager()
-download_status = manager.dict()
 download_history = manager.list()
 
 @app.route('/')
@@ -20,19 +19,14 @@ def download():
         return jsonify({'status': 'error', 'message': 'URL is required.'}), 400
 
     # Reset status and history for a new download
-    download_status.clear()
     # Clear the list by replacing its content
     download_history[:] = []
     
     # Start the download in a separate process
-    p = Process(target=Downloader.download_all_files, args=(url, download_status, download_history))
+    p = Process(target=Downloader.download_all_files, args=(url, download_history))
     p.start()
 
     return jsonify({'status': 'success', 'message': f'Download initiated for: {url}'})
-
-@app.route('/status')
-def status():
-    return jsonify(dict(download_status))
 
 @app.route('/history')
 def history():

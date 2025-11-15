@@ -8,6 +8,7 @@ import os
 import time
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor
 
 def get_identifier_from_url(url):
     """Extracts the identifier from an archive.org URL."""
@@ -25,13 +26,13 @@ def get_identifier_from_url(url):
             return None
     return None
 
-def get_files_list(identifier):
+def get_files_list(session, identifier):
     """Fetches and parses the files.xml to get a list of files."""
     files_xml_url = f"https://archive.org/download/{identifier}/{identifier}_files.xml"
     print(f"Attempting to fetch file list from: {files_xml_url}")
 
     try:
-        response = requests.get(files_xml_url)
+        response = session.get(files_xml_url)
         response.raise_for_status()
         return response.text
     except requests.exceptions.HTTPError as e:
@@ -45,17 +46,16 @@ def get_files_list(identifier):
         print(f"Error fetching files.xml: {e}")
         return None
 
-def download_file(file_url, local_path, status_dict, history_list):
+def download_file(session, file_url, local_path, history_list):
     """Downloads a single file and updates status."""
     file_name = os.path.basename(local_path)
-    status_dict['current_file'] = file_name
     print(f"Downloading {file_url} to {local_path}")
     try:
-        with requests.get(file_url, stream=True) as r:
+        with session.get(file_url, stream=True) as r:
             r.raise_for_status()
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             with open(local_path, 'wb') as f:
-                for chunk in r.iter_content(chunk_size=8192):
+                for chunk in r.iter_content(chunk_size=1024*1024): # 1MB chunks
                     f.write(chunk)
         print(f"Successfully downloaded {file_name}")
         history_list.append({'file': file_name, 'status': 'Completed'})
@@ -68,12 +68,9 @@ def download_file(file_url, local_path, status_dict, history_list):
         print(f"An unexpected error occurred while downloading {file_name}: {e}")
         history_list.append({'file': file_name, 'status': f'Error: {e}'})
         return False
-    finally:
-        if 'current_file' in status_dict and status_dict['current_file'] == file_name:
-            status_dict['current_file'] = None
 
 
-def download_all_files(url, status_dict, history_list):
+def download_all_files(url, history_list, max_workers=5):
     """Main function to download all files from an archive.org folder."""
     if not url.endswith('/'):
         url += '/'
@@ -83,7 +80,9 @@ def download_all_files(url, status_dict, history_list):
         print("Invalid archive.org URL. Could not extract identifier.")
         return
 
-    files_xml_content = get_files_list(identifier)
+    # Use a session for connection pooling
+    session = requests.Session()
+    files_xml_content = get_files_list(session, identifier)
     if not files_xml_content:
         return
 
@@ -104,11 +103,15 @@ def download_all_files(url, status_dict, history_list):
 
     base_download_url = f"https://archive.org/download/{identifier}/"
 
-    for file_path in file_paths:
-        file_url = f"{base_download_url}{file_path}"
-        local_file_path = os.path.join(download_dir, file_path.lstrip('/'))
-        download_file(file_url, local_file_path, status_dict, history_list)
-        time.sleep(0.1) # Small delay to be polite to the server
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = []
+        for file_path in file_paths:
+            file_url = f"{base_download_url}{file_path}"
+            local_file_path = os.path.join(download_dir, file_path.lstrip('/'))
+            futures.append(executor.submit(download_file, session, file_url, local_file_path, history_list))
+
+        for future in futures:
+            future.result()  # Wait for all downloads to complete
 
     print(f"\nAll files processed. Downloaded to: {download_dir}")
 
@@ -116,13 +119,14 @@ def download_all_files(url, status_dict, history_list):
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python Downloader.py <archive.org_folder_url>")
+        print("Usage: python Downloader.py <archive.org_folder_url> [max_workers]")
         sys.exit(1)
-    
+
+    archive_url = sys.argv[1]
+    # Allow configuring max_workers from command line, default to 5
+    workers = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+
     # For standalone execution, we don't have shared memory objects.
-    # You could create dummy ones if needed for testing.
-    status = {}
     history = []
-    download_all_files(sys.argv[1], status, history)
-    print("\nStatus:", status)
-    print("History:", history)
+    download_all_files(archive_url, history, max_workers=workers)
+    print("\nHistory:", history)

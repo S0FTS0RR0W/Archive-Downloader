@@ -41,13 +41,7 @@
       <div id="message-container" class="mt-6"></div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <div class="bg-gray-800 rounded-lg shadow-lg p-8">
-        <h2 class="text-2xl font-bold mb-4">Currently Downloading</h2>
-        <div id="current-status">
-          <p class="text-gray-400">No active downloads.</p>
-        </div>
-      </div>
+    <div class="grid grid-cols-1 gap-8">
       <div class="bg-gray-800 rounded-lg shadow-lg p-8">
         <h2 class="text-2xl font-bold mb-4">Download History</h2>
         <div id="history-container" class="space-y-2">
@@ -61,7 +55,6 @@
     const form = document.getElementById('download-form');
     const spinner = document.getElementById('spinner');
     const messageContainer = document.getElementById('message-container');
-    const currentStatusContainer = document.getElementById('current-status');
     const historyContainer = document.getElementById('history-container');
     let pollingInterval;
 
@@ -77,7 +70,6 @@
 
       spinner.classList.remove('hidden');
       messageContainer.innerHTML = '';
-      currentStatusContainer.innerHTML = '<p class="text-gray-400">Starting...</p>';
       historyContainer.innerHTML = '<p class="text-gray-400">...</p>';
 
       try {
@@ -103,24 +95,9 @@
 
     async function updateStatusAndHistory() {
       try {
-        const [statusRes, historyRes] = await Promise.all([
-          fetch('/status'),
-          fetch('/history')
-        ]);
+        const historyRes = await fetch('/history');
 
-        const status = await statusRes.json();
         const history = await historyRes.json();
-
-        // Update current status
-        if (status.current_file) {
-          currentStatusContainer.innerHTML = `<p class="font-mono">${status.current_file}</p>`;
-        } else {
-          currentStatusContainer.innerHTML = `<p class="text-gray-400">No active downloads.</p>`;
-          // If there's no current file and there's history, the download is likely complete.
-          if (history.length > 0) {
-            clearInterval(pollingInterval);
-          }
-        }
 
         // Update history
         if (history.length > 0) {
