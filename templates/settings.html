@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Archive Downloader</title>
+    <title>Settings</title>
     <style>
         :root {
             --bg-gradient: linear-gradient(180deg, #f7f9fc 0%, #eef2f7 100%);
@@ -15,9 +15,8 @@
             --border-color: #e2e8f0;
             --shadow-color: rgba(0, 0, 0, 0.05);
             --input-bg: #fff;
-            --history-bg: #f7fafc;
-            --completed-bg: #c6f6d5;
-            --completed-text: #22543d;
+            --success-bg: #c6f6d5;
+            --success-text: #22543d;
             --error-bg: #fed7d7;
             --error-text: #822727;
         }
@@ -32,9 +31,8 @@
             --border-color: #444;
             --shadow-color: rgba(0, 0, 0, 0.4);
             --input-bg: #333;
-            --history-bg: #222;
-            --completed-bg: #1a3c1f;
-            --completed-text: #66bb6a;
+            --success-bg: #1a3c1f;
+            --success-text: #66bb6a;
             --error-bg: #4d1a1a;
             --error-text: #ef5350;
         }
@@ -68,15 +66,18 @@
             box-shadow: 0 2px 4px var(--shadow-color);
             transition: background-color 0.3s ease, box-shadow 0.3s ease;
         }
-        form { display: flex; gap: 10px; margin-bottom: 1.5em; }
-        input[type="text"] {
-            flex-grow: 1;
+        .message { color: var(--success-text); background-color: var(--success-bg); padding: 1em; border-radius: 4px; }
+        .error { color: var(--error-text); background-color: var(--error-bg); padding: 1em; border-radius: 4px; }
+        form { margin-top: 1.5em; }
+        label { font-weight: bold; display: block; margin-bottom: 0.5em; }
+        input[type="number"] {
             padding: 10px;
             border: 1px solid var(--border-color);
             background-color: var(--input-bg);
             color: var(--text-color);
             border-radius: 4px;
             font-size: 1em;
+            width: 100px;
             transition: background-color 0.3s ease, border-color 0.3s ease;
         }
         button {
@@ -88,9 +89,9 @@
             font-size: 1em;
             cursor: pointer;
             transition: background-color 0.3s ease;
+            margin-left: 10px;
         }
-        button:hover:not(:disabled) { background-color: var(--primary-hover); }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        button:hover { background-color: var(--primary-hover); }
         #theme-toggle {
             background: none;
             border: 1px solid var(--border-color);
@@ -101,97 +102,32 @@
             font-size: 1.2em;
             line-height: 1;
         }
-        .history {
-            border: 1px solid var(--border-color);
-            border-radius: 4px;
-            padding: 1em;
-            margin-top: 1em;
-            max-height: 400px;
-            overflow-y: auto;
-            background-color: var(--history-bg);
-            transition: background-color 0.3s ease, border-color 0.3s ease;
-        }
-        .history p { margin: 0.5em 0; padding: 0.5em; border-radius: 4px; transition: background-color 0.3s ease, color 0.3s ease; }
-        .history .status-completed { background-color: var(--completed-bg); color: var(--completed-text); }
-        .history .status-error { background-color: var(--error-bg); color: var(--error-text); }
-        #status-message { margin-top: 1em; font-weight: bold; }
-        .status-info { color: var(--primary-hover); }
-        .status-success { color: var(--completed-text); }
-        .status-error-msg { color: var(--error-text); }
     </style>
 </head>
 <body>
     <header class="header">
-        <h1>Archive.org Downloader</h1>
+        <h1>Settings</h1>
         <div class="nav">
             <a href="/">Home</a>
             <a href="/settings">Settings</a>
             <button id="theme-toggle" title="Toggle theme">🌙</button>
         </div>
     </header>
-
     <div class="container">
-        <form id="download-form">
-            <input type="text" id="url-input" name="url" placeholder="Enter archive.org URL" required>
-            <button type="submit" id="download-button">Download</button>
+        {% if message %}
+            <p class="message">{{ message }}</p>
+        {% endif %}
+        {% if error %}
+            <p class="error">{{ error }}</p>
+        {% endif %}
+
+        <form method="POST">
+            <label for="max_workers">Max Concurrent Downloads</label>
+            <input type="number" id="max_workers" name="max_workers" value="{{ settings.max_workers }}" min="1">
+            <button type="submit">Save Settings</button>
         </form>
-        <div id="status-message" style="margin-top: 1em;"></div>
-        
-        <h2>Download Progress</h2>
-        <div id="history-log" class="history">
-            Waiting for download to start...
-        </div>
     </div>
-
     <script>
-        const form = document.getElementById('download-form');
-        const urlInput = document.getElementById('url-input');
-        const downloadButton = document.getElementById('download-button');
-        const statusMessage = document.getElementById('status-message');
-        const historyLog = document.getElementById('history-log');
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            statusMessage.className = 'status-info';
-            statusMessage.textContent = 'Starting download... Please wait.';
-            downloadButton.disabled = true;
-            urlInput.disabled = true;
-
-            const formData = new FormData(form);
-            const response = await fetch('/download', { method: 'POST', body: formData });
-            const result = await response.json();
-
-            if (result.error) {
-                statusMessage.className = 'status-error-msg';
-                statusMessage.textContent = result.error;
-                downloadButton.disabled = false;
-                urlInput.disabled = false;
-            }
-        });
-
-        const statusInterval = setInterval(async () => {
-            const response = await fetch('/status');
-            const data = await response.json();
-            
-            if (data.history.length > 0) {
-                historyLog.innerHTML = '';
-                data.history.forEach(item => {
-                    const p = document.createElement('p');
-                    const statusClass = item.status === 'Completed' ? 'status-completed' : 'status-error';
-                    p.className = statusClass;
-                    p.textContent = `[${item.status}] ${item.file}`;
-                    historyLog.appendChild(p);
-                });
-            }
-
-            if (!data.is_downloading && downloadButton.disabled) {
-                statusMessage.className = 'status-success';
-                statusMessage.textContent = 'Download process finished!';
-                downloadButton.disabled = false;
-                urlInput.disabled = false;
-            }
-        }, 2000);
-
         // --- Theme Switcher ---
         const themeToggleButton = document.getElementById('theme-toggle');
 
